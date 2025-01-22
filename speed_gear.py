@@ -1,4 +1,5 @@
 from ctypes import *
+from fetch_pid import PID
 
 dll = windll.LoadLibrary("x64_HookDll.dll")
 
