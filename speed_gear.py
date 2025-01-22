@@ -1,7 +1,7 @@
 from ctypes import *
 from fetch_pid import PID
 
-dll = windll.LoadLibrary("x64_HookDll.dll")
+dll = windll.LoadLibrary("x64/HookDll.dll")
 
 StartHook = getattr(dll, "StartHook")
 setSpeed = getattr(dll, "setSpeed")
