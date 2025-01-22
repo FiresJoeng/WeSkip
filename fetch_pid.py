@@ -14,4 +14,4 @@ for process in psutil.process_iter(['pid', 'name', 'memory_info']):
 if PID:
     print(f"已确定{process_name}的PID: {PID}")
 else:
-    exit(f"未找到'{process_name}'.")
+    exit(f"未找到{process_name}!")
