@@ -15,7 +15,7 @@ class MainApp:
         self.main_window.resizable(width=False, height=False)
         screenwidth = self.main_window.winfo_screenwidth()
         screenheight = self.main_window.winfo_screenheight()
-        size = '%dx%d+%d+%d' % (200, 50, (screenwidth - 200) / 2, (screenheight - 50) / 2)
+        size = '%dx%d+%d+%d' % (250, 50, (screenwidth - 250) / 2, (screenheight - 50) / 2)
         self.main_window.geometry(size)
 
         self.button_state = tk.StringVar()
@@ -26,7 +26,7 @@ class MainApp:
             textvariable=self.button_state, 
             command=self.toggle_speed
         )
-        self.start_button.place(relx=0.5, rely=0.5, anchor='center', width=100, height=30)
+        self.start_button.place(relx=0.5, rely=0.5, anchor='center', width=150, height=30)
 
     def toggle_speed(self):
         if self.button_state.get() == '广告加速':
