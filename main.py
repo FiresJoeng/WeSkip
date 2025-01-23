@@ -1,6 +1,6 @@
 import tkinter as tk
 from fetch_pid import PID, process_name, RAM
-from speed_gear import SPEEDx1, SPEEDx10
+from speedhack import SPEEDx1, SPEEDx10
 
 if PID:
     print(f"已确定{process_name}的PID: {PID}, RAM使用: {RAM / (1024 * 1024):.2f} MB.")
