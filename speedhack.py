@@ -1,22 +1,18 @@
 from ctypes import *
 from fetch_pid import PID
 
-dll = windll.LoadLibrary("x64/HookDll.dll")
+# .dll function calling: InjectSpeedhack(Speed)
+dll = windll.LoadLibrary("dll/speedhack.dll")
 
-StartHook = getattr(dll, "StartHook")
-setSpeed = getattr(dll, "setSpeed")
-StopHook = getattr(dll, "StopHook")
 
 def SPEEDx10():
     try:
-        StartHook(c_ulong(PID))
-        setSpeed(c_double(10.0))
+        pass
     except Exception as e:
         print(f"错误: {e}")
 
 def SPEEDx1():
     try:
-        setSpeed(c_double(1))
-        StopHook(c_ulong(PID))
+        pass
     except Exception as e:
         print(f"错误: {e}")
