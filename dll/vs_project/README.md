@@ -4,7 +4,7 @@
 
 
 
-### 编译教程（婴儿级）：
+### 编译教程:
 
 **① 安装Visual Studio及C++环境依赖**
 
@@ -34,11 +34,11 @@ Detours\lib.X64\detours.lib;
 
 **④ 依次点击位于Visual Studio工具栏的 生成 > 生成解决方案**
 
-**⑤ 等待编译完成，然后你会在某个新文件夹找到"vs_project.dll", 那个就是成品。**
+**⑤ 等待编译完成, 然后你会在某个新文件夹找到"vs_project.dll", 那个就是成品**
 
 
 
-### 致谢：
+### 致谢:
 
 感谢 [repo:absoIute/Speedhack](https://github.com/absoIute/Speedhack) 的变速技术驱动, 这个程序是抄这个仓库做的.  
-感谢 [repo:microsoft/Detours](https://github.com/microsoft/Detours) 的Hook技术驱动，我们靠它实现钩子拦截。
+感谢 [repo:microsoft/Detours](https://github.com/microsoft/Detours) 的Hook技术驱动, 我们靠它实现钩子拦截.
