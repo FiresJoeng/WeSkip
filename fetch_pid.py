@@ -1,6 +1,6 @@
 import psutil
 
-process_name = "WeChatAppEx.exe"
+process_name = "Minecraft.Windows.exe"
 PID = None
 RAM = 0
 
