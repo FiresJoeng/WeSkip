@@ -34,7 +34,7 @@ Detours\lib.X64\detours.lib;
 
 **④ 依次点击位于Visual Studio工具栏的 生成 > 生成解决方案**
 
-**⑤ 等待编译完成，然后你会在某个文件夹找到"vs_project.dll", 那个就是成品。**
+**⑤ 等待编译完成，然后你会在某个新文件夹找到"vs_project.dll", 那个就是成品。**
 
 
 
