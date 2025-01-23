@@ -1,4 +1,4 @@
-#include "Speedhack.h"
+#include "speedhack.h"
 
 
 // speedhack.dll 主要部分
