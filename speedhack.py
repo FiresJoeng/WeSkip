@@ -15,6 +15,7 @@ if not os.path.exists(DLL_PATH):
 
 try:
     inject(PID, DLL_PATH)
+    print('注入成功')
 except Exception as e:
     print(f"错误: {e}")
 
