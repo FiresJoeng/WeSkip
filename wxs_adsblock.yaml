@@ -1,0 +1,18 @@
+# WeChatScript Ads Block YAML for Clash Verge
+# GitHub: @FiresJoeng
+
+proxies:
+  - name: "启用"
+    type: reject
+  - name: "禁用"
+    type: direct
+
+proxy-groups:
+  - name: "微信小程序广告屏蔽"
+    type: select
+    proxies:
+      - "启用"
+      - "禁用"
+
+rules:
+  - DOMAIN-SUFFIX,wxs.qq.com,微信小程序广告屏蔽

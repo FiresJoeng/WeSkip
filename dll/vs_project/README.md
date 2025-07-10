@@ -40,5 +40,6 @@ Detours\lib.X64\detours.lib;
 
 ### 致谢:
 
-感谢 [repo:absoIute/Speedhack](https://github.com/absoIute/Speedhack) 的变速技术驱动, 这个程序是抄这个仓库做的.  
+感谢 [repo:absoIute/Speedhack](https://github.com/absoIute/Speedhack) 的变速技术驱动, 这个程序是抄这个仓库做的.
+
 感谢 [repo:microsoft/Detours](https://github.com/microsoft/Detours) 的Hook技术驱动, 我们靠它实现钩子拦截.
