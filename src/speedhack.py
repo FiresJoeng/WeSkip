@@ -1,12 +1,16 @@
 import os
 import ctypes
-from pyinjector import inject
-from fetch_pid import PID
+from src.fetch_pid import PID
 
 
-# .dll function calling: 
-# InjectSpeedhack(Speed)
-# EjectSpeedhack()
+def inject():
+    """
+    .dll function calling: 
+    InjectSpeedhack(Speed)
+    EjectSpeedhack()"""
+    pass
+
+
 
 DLL_PATH = "dll/speedhack.dll"
 if not os.path.exists(DLL_PATH):
