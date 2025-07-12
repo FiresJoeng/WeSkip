@@ -39,9 +39,11 @@ speedhack_dll = load_dll()
 # 函数: 注入 DLL
 def inject_dll(pid, speed):
     try:
+        # 定义函数参数和返回类型
         inject_func = speedhack_dll.Inject
         inject_func.argtypes = [ctypes.c_ulong, ctypes.c_double]
         inject_func.restype = ctypes.c_bool
+        # 注入函数接口
         result = inject_func(pid, speed)
         return result
     except Exception as e:
@@ -52,9 +54,11 @@ def inject_dll(pid, speed):
 # 函数: 卸载 DLL
 def eject_dll(pid):
     try:
+        # 定义函数参数和返回类型
         eject_func = speedhack_dll.Eject
         eject_func.argtypes = [ctypes.c_ulong]
         eject_func.restype = ctypes.c_bool
+        # 卸载函数接口
         result = eject_func(pid)
         return result
     except Exception as e:

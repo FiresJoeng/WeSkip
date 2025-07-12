@@ -1,86 +1,56 @@
-// 定义和导入
-#define SPEEDHACK_EXPORTS
-
+// speedhack.cpp
 #include "speedhack.h"
-#include <psapi.h>
-#include <string>
+#include "inject.h"
+#include <Shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
+#pragma comment(lib, "inject.lib")
 
 
-// DllMain 入口点
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
-{
-    switch (ul_reason_for_call)
-    {
-    case DLL_PROCESS_ATTACH:
-        // 当 DLL 被加载时，禁用线程库调用，可以防止某些情况下的死锁
-        DisableThreadLibraryCalls(hModule);
-        break;
-    case DLL_THREAD_ATTACH:
-    case DLL_THREAD_DETACH:
-    case DLL_PROCESS_DETACH:
-        // 当 DLL 被卸载时，确保我们的 hook 被正确移除
-        if (Speedhack::initialised) {
-            Speedhack::Detach();
-        }
-        break;
-    }
-    return TRUE;
-}
-
-
-// Speedhack 命名空间实现
 namespace Speedhack
 {
-    // 全局变量定义
     double speed = 1.0;
     bool initialised = false;
 
-	// 函数指针类型定义
-    _tGetTickCount _GTC = nullptr;
-    DWORD _GTC_BaseTime = 0, _GTC_OffsetTime = 0;
+    _tGetTickCount    _GTC = nullptr;
+    DWORD             _GTC_BaseTime = 0, _GTC_OffsetTime = 0;
 
-    _tGetTickCount64 _GTC64 = nullptr;
-    ULONGLONG _GTC64_BaseTime = 0, _GTC64_OffsetTime = 0;
+    _tGetTickCount64  _GTC64 = nullptr;
+    ULONGLONG         _GTC64_BaseTime = 0, _GTC64_OffsetTime = 0;
 
     _tQueryPerformanceCounter _QPC = nullptr;
-    LARGE_INTEGER _QPC_BaseTime = LARGE_INTEGER(), _QPC_OffsetTime = LARGE_INTEGER();
+    LARGE_INTEGER            _QPC_BaseTime = LARGE_INTEGER(), _QPC_OffsetTime = LARGE_INTEGER();
 
-	// 获取 GetTickCount 的 Hook 实现
     DWORD WINAPI _hGetTickCount()
     {
-        return _GTC_OffsetTime + ((_GTC() - _GTC_BaseTime) * speed);
+        return _GTC_OffsetTime + DWORD(( _GTC() - _GTC_BaseTime ) * speed);
     }
 
-	// 获取 GetTickCount64 的 Hook 实现
     ULONGLONG WINAPI _hGetTickCount64()
     {
-        return _GTC64_OffsetTime + ((_GTC64() - _GTC64_BaseTime) * speed);
+        return _GTC64_OffsetTime + ULONGLONG(( _GTC64() - _GTC64_BaseTime ) * speed);
     }
 
-	// 获取 QueryPerformanceCounter 的 Hook 实现
     BOOL WINAPI _hQueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount)
     {
-        LARGE_INTEGER x;
-        _QPC(&x);
-        lpPerformanceCount->QuadPart = _QPC_OffsetTime.QuadPart + ((x.QuadPart - _QPC_BaseTime.QuadPart) * speed);
+        LARGE_INTEGER now;
+        _QPC(&now);
+        lpPerformanceCount->QuadPart = _QPC_OffsetTime.QuadPart + LONGLONG(( now.QuadPart - _QPC_BaseTime.QuadPart ) * speed);
         return TRUE;
     }
 
-    // 预载 Hook
     void Setup()
     {
         if (initialised) return;
 
         _GTC = &GetTickCount;
-        _GTC64 = &GetTickCount64;
-        _QPC = &QueryPerformanceCounter;
-
         _GTC_BaseTime = _GTC();
         _GTC_OffsetTime = _GTC_BaseTime;
 
+        _GTC64 = &GetTickCount64;
         _GTC64_BaseTime = _GTC64();
         _GTC64_OffsetTime = _GTC64_BaseTime;
 
+        _QPC = &QueryPerformanceCounter;
         _QPC(&_QPC_BaseTime);
         _QPC_OffsetTime.QuadPart = _QPC_BaseTime.QuadPart;
 
@@ -94,7 +64,6 @@ namespace Speedhack
         initialised = true;
     }
 
-    // 移除 Hook
     void Detach()
     {
         if (!initialised) return;
@@ -109,16 +78,16 @@ namespace Speedhack
         initialised = false;
     }
 
-    // 设置新的速度值
     void SetSpeed(double relSpeed)
     {
         if (initialised)
         {
-            _GTC_OffsetTime = _hGetTickCount();
-            _GTC_BaseTime = _GTC();
+            // 重新计算基准
+            _GTC_OffsetTime    = _hGetTickCount();
+            _GTC_BaseTime      = _GTC();
 
-            _GTC64_OffsetTime = _hGetTickCount64();
-            _GTC64_BaseTime = _GTC64();
+            _GTC64_OffsetTime  = _hGetTickCount64();
+            _GTC64_BaseTime    = _GTC64();
 
             _hQueryPerformanceCounter(&_QPC_OffsetTime);
             _QPC(&_QPC_BaseTime);
@@ -127,159 +96,74 @@ namespace Speedhack
     }
 }
 
+// ----------------------------------------------------------------------------
+// 以下为“宿主进程”调用的导出函数，实现与 example.cpp 类似的注入/卸载接口
+// ----------------------------------------------------------------------------
 
-// 导出函数实现
-SPEEDHACK_API DWORD WINAPI RemoteThread_Initialize(LPVOID lpParameter)
+namespace {
+    // speedhack.dll 文件名
+    const wchar_t* SPEEDHACK_DLL = L"speedhack.dll";
+}
+
+extern "C" __declspec(dllexport)
+int SHInitialize(DWORD pid, double spd)
 {
-    double initial_speed = *(double*)lpParameter;
-    Speedhack::Setup();
-    Speedhack::SetSpeed(initial_speed);
+    // 1. 构造 DLL 路径
+    wchar_t dllPath[MAX_PATH] = { 0 };
+    GetModuleFileNameW(GetModuleHandleW(SPEEDHACK_DLL), dllPath, MAX_PATH);
+    PathRemoveFileSpecW(dllPath);
+    PathAppendW(dllPath, SPEEDHACK_DLL);
+
+    // 2. 注入 DLL
+    if (!InjectDll1(pid, dllPath)) {
+        return -1;  // 注入失败
+    }
+
+    // 3. 远程调用 InjectSpeedhack(spd)
+    //    这里假设 InjectDll1 会在注入后自动执行 DllMain，
+    //    并且暴露了 InjectSpeedhack 导出函数，可用 CreateRemoteThread 调用。
+    //    为简单起见，我们直接创建远程线程执行 InjectSpeedhack：
+    HMODULE hMod = GetModuleHandleW(SPEEDHACK_DLL);
+    FARPROC fn = GetProcAddress(hMod, "InjectSpeedhack");
+    if (!fn) return -2;
+
+    HANDLE hThread = CreateRemoteThread(
+        OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid),
+        nullptr, 0,
+        (LPTHREAD_START_ROUTINE)fn,
+        (LPVOID)&spd,
+        0, nullptr
+    );
+    if (!hThread) return -3;
+    WaitForSingleObject(hThread, INFINITE);
+    CloseHandle(hThread);
+
+    return 0;  // 成功
+}
+
+extern "C" __declspec(dllexport)
+int SHUninitialize(DWORD pid)
+{
+    // 1. 远程调用 EjectSpeedhack()
+    HMODULE hMod = GetModuleHandleW(SPEEDHACK_DLL);
+    FARPROC fn = GetProcAddress(hMod, "EjectSpeedhack");
+    if (!fn) return -1;
+
+    HANDLE hThread = CreateRemoteThread(
+        OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid),
+        nullptr, 0,
+        (LPTHREAD_START_ROUTINE)fn,
+        nullptr,
+        0, nullptr
+    );
+    if (!hThread) return -2;
+    WaitForSingleObject(hThread, INFINITE);
+    CloseHandle(hThread);
+
+    // 2. 卸载 DLL
+    if (!EnjectDll(pid, SPEEDHACK_DLL)) {
+        return -3;
+    }
+
     return 0;
-}
-
-SPEEDHACK_API DWORD WINAPI RemoteThread_Shutdown(LPVOID lpParameter)
-{
-    Speedhack::Detach();
-    return 0;
-}
-
-
-// 内部辅助函数：获取本 DLL 的名称
-std::string GetCurrentDllName() {
-    char dllPath[MAX_PATH];
-    HMODULE hModule = NULL;
-    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        (LPCSTR)&GetCurrentDllName, &hModule);
-    GetModuleFileNameA(hModule, dllPath, sizeof(dllPath));
-    std::string pathStr(dllPath);
-    size_t lastSlash = pathStr.find_last_of("\\/");
-    return pathStr.substr(lastSlash + 1);
-}
-
-
-// 内部辅助函数：在远程进程中获取模块句柄
-HMODULE GetRemoteModuleHandle(DWORD dwProcessId, const char* moduleName) {
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, dwProcessId);
-    if (!hProcess) {
-        return NULL;
-    }
-
-    HMODULE hMods[1024];
-    DWORD cbNeeded;
-    HMODULE hModule = NULL;
-
-    if (EnumProcessModules(hProcess, hMods, sizeof(hMods), &cbNeeded)) {
-        for (unsigned int i = 0; i < (cbNeeded / sizeof(HMODULE)); i++) {
-            char szModName[MAX_PATH];
-            if (GetModuleBaseNameA(hProcess, hMods[i], szModName, sizeof(szModName))) {
-                if (_stricmp(szModName, moduleName) == 0) {
-                    hModule = hMods[i];
-                    break;
-                }
-            }
-        }
-    }
-
-    CloseHandle(hProcess);
-    return hModule;
-}
-
-
-// 核心注入函数实现 (按 PID)
-SPEEDHACK_API bool Inject(DWORD dwProcessId, double speed)
-{
-    if (dwProcessId == 0) {
-        return false;
-    }
-
-    char dllPath[MAX_PATH];
-    std::string dllName = GetCurrentDllName();
-    HMODULE hModule = GetModuleHandleA(dllName.c_str());
-    if (hModule == NULL) return false;
-    GetModuleFileNameA(hModule, dllPath, MAX_PATH);
-
-    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-    if (hProcess == NULL) {
-        return false;
-    }
-
-    LPVOID pRemoteDllPath = VirtualAllocEx(hProcess, NULL, sizeof(dllPath), MEM_COMMIT, PAGE_READWRITE);
-    if (pRemoteDllPath == NULL) {
-        CloseHandle(hProcess);
-        return false;
-    }
-
-    if (!WriteProcessMemory(hProcess, pRemoteDllPath, dllPath, sizeof(dllPath), NULL)) {
-        VirtualFreeEx(hProcess, pRemoteDllPath, 0, MEM_RELEASE);
-        CloseHandle(hProcess);
-        return false;
-    }
-
-    LPVOID pLoadLibraryA = (LPVOID)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA");
-    HANDLE hThreadLoad = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pLoadLibraryA, pRemoteDllPath, 0, NULL);
-    if (hThreadLoad == NULL) {
-        VirtualFreeEx(hProcess, pRemoteDllPath, 0, MEM_RELEASE);
-        CloseHandle(hProcess);
-        return false;
-    }
-
-    WaitForSingleObject(hThreadLoad, INFINITE);
-    CloseHandle(hThreadLoad);
-    VirtualFreeEx(hProcess, pRemoteDllPath, 0, MEM_RELEASE);
-
-    LPVOID pRemoteSpeed = VirtualAllocEx(hProcess, NULL, sizeof(double), MEM_COMMIT, PAGE_READWRITE);
-    if (!WriteProcessMemory(hProcess, pRemoteSpeed, &speed, sizeof(double), NULL)) {
-        CloseHandle(hProcess);
-        return false;
-    }
-
-    LPVOID pRemoteInit = (LPVOID)GetProcAddress(hModule, "RemoteThread_Initialize");
-    HANDLE hThreadInit = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pRemoteInit, pRemoteSpeed, 0, NULL);
-
-    WaitForSingleObject(hThreadInit, INFINITE);
-    CloseHandle(hThreadInit);
-    VirtualFreeEx(hProcess, pRemoteSpeed, 0, MEM_RELEASE);
-    CloseHandle(hProcess);
-
-    return true;
-}
-
-
-// 核心取消注入函数实现
-SPEEDHACK_API bool Eject(DWORD dwProcessId)
-{
-    if (dwProcessId == 0) {
-        return false;
-    }
-
-    std::string dllName = GetCurrentDllName();
-    HMODULE hRemoteModule = GetRemoteModuleHandle(dwProcessId, dllName.c_str());
-    if (hRemoteModule == NULL) {
-        return false;
-    }
-
-    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-    if (hProcess == NULL) {
-        return false;
-    }
-
-    LPVOID pRemoteShutdown = (LPVOID)GetProcAddress(GetModuleHandleA(dllName.c_str()), "RemoteThread_Shutdown");
-    HANDLE hThreadShutdown = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pRemoteShutdown, NULL, 0, NULL);
-    if (hThreadShutdown) {
-        WaitForSingleObject(hThreadShutdown, INFINITE);
-        CloseHandle(hThreadShutdown);
-    }
-
-    LPVOID pFreeLibrary = (LPVOID)GetProcAddress(GetModuleHandleA("kernel32.dll"), "FreeLibrary");
-    HANDLE hThreadEject = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pFreeLibrary, hRemoteModule, 0, NULL);
-    if (hThreadEject == NULL) {
-        CloseHandle(hProcess);
-        return false;
-    }
-
-    WaitForSingleObject(hThreadEject, INFINITE);
-    CloseHandle(hThreadEject);
-    CloseHandle(hProcess);
-
-    return true;
 }

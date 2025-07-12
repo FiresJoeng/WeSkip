@@ -34,7 +34,7 @@ class MainApp:
     def toggle_speed(self):
         if self.button_state.get() == '广告加速':
             try:
-                inject_dll(PID, 1.5)
+                inject_dll(PID, 20)
                 print("广告已加速!")
                 self.button_state.set('恢复正常')
             except Exception as e:
