@@ -66,7 +66,7 @@ namespace Speedhack
         return TRUE;
     }
 
-    // 初始化 Hook
+    // 预载 Hook
     void Setup()
     {
         if (initialised) return;

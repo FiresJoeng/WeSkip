@@ -1,6 +1,6 @@
 import tkinter as tk
 from src.fetch_pid import PID, process_name, RAM
-from src.speedhack import SPEEDx1, SPEEDx10
+from src.speedhack import inject_dll, eject_dll
 
 if PID:
     print(f"已确定{process_name}的PID: {PID}, RAM使用: {RAM / (1024 * 1024):.2f} MB.")
@@ -34,14 +34,14 @@ class MainApp:
     def toggle_speed(self):
         if self.button_state.get() == '广告加速':
             try:
-                SPEEDx10()
+                inject_dll(PID, 1.5)
                 print("广告已加速!")
                 self.button_state.set('恢复正常')
             except Exception as e:
                 print(f"启动变速失败: {e}!")
         else:
             try:
-                SPEEDx1()
+                eject_dll(PID)
                 print("已恢复正常!")
                 self.button_state.set('广告加速')
             except Exception as e:
