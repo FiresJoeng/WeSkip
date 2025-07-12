@@ -1,6 +1,10 @@
+// 定义和导入
+#define SPEEDHACK_EXPORTS
+
 #include "speedhack.h"
 #include <psapi.h>
 #include <string>
+
 
 // DllMain 入口点
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
@@ -23,12 +27,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     return TRUE;
 }
 
+
+// Speedhack 命名空间实现
 namespace Speedhack
 {
     // 全局变量定义
     double speed = 1.0;
     bool initialised = false;
 
+	// 函数指针类型定义
     _tGetTickCount _GTC = nullptr;
     DWORD _GTC_BaseTime = 0, _GTC_OffsetTime = 0;
 
@@ -38,19 +45,19 @@ namespace Speedhack
     _tQueryPerformanceCounter _QPC = nullptr;
     LARGE_INTEGER _QPC_BaseTime = LARGE_INTEGER(), _QPC_OffsetTime = LARGE_INTEGER();
 
-    // Hooked GetTickCount
+	// 获取 GetTickCount 的 Hook 实现
     DWORD WINAPI _hGetTickCount()
     {
         return _GTC_OffsetTime + ((_GTC() - _GTC_BaseTime) * speed);
     }
 
-    // Hooked GetTickCount64
+	// 获取 GetTickCount64 的 Hook 实现
     ULONGLONG WINAPI _hGetTickCount64()
     {
         return _GTC64_OffsetTime + ((_GTC64() - _GTC64_BaseTime) * speed);
     }
 
-    // Hooked QueryPerformanceCounter
+	// 获取 QueryPerformanceCounter 的 Hook 实现
     BOOL WINAPI _hQueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount)
     {
         LARGE_INTEGER x;
@@ -73,7 +80,7 @@ namespace Speedhack
 
         _GTC64_BaseTime = _GTC64();
         _GTC64_OffsetTime = _GTC64_BaseTime;
-        
+
         _QPC(&_QPC_BaseTime);
         _QPC_OffsetTime.QuadPart = _QPC_BaseTime.QuadPart;
 
@@ -120,8 +127,8 @@ namespace Speedhack
     }
 }
 
-// 导出函数实现
 
+// 导出函数实现
 SPEEDHACK_API DWORD WINAPI RemoteThread_Initialize(LPVOID lpParameter)
 {
     double initial_speed = *(double*)lpParameter;
@@ -136,11 +143,11 @@ SPEEDHACK_API DWORD WINAPI RemoteThread_Shutdown(LPVOID lpParameter)
     return 0;
 }
 
+
 // 内部辅助函数：获取本 DLL 的名称
 std::string GetCurrentDllName() {
     char dllPath[MAX_PATH];
     HMODULE hModule = NULL;
-    // 获取当前代码所在的模块句柄
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
         (LPCSTR)&GetCurrentDllName, &hModule);
     GetModuleFileNameA(hModule, dllPath, sizeof(dllPath));
@@ -148,6 +155,7 @@ std::string GetCurrentDllName() {
     size_t lastSlash = pathStr.find_last_of("\\/");
     return pathStr.substr(lastSlash + 1);
 }
+
 
 // 内部辅助函数：在远程进程中获取模块句柄
 HMODULE GetRemoteModuleHandle(DWORD dwProcessId, const char* moduleName) {
@@ -227,7 +235,7 @@ SPEEDHACK_API bool Inject(DWORD dwProcessId, double speed)
 
     LPVOID pRemoteInit = (LPVOID)GetProcAddress(hModule, "RemoteThread_Initialize");
     HANDLE hThreadInit = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pRemoteInit, pRemoteSpeed, 0, NULL);
-    
+
     WaitForSingleObject(hThreadInit, INFINITE);
     CloseHandle(hThreadInit);
     VirtualFreeEx(hProcess, pRemoteSpeed, 0, MEM_RELEASE);
@@ -235,6 +243,7 @@ SPEEDHACK_API bool Inject(DWORD dwProcessId, double speed)
 
     return true;
 }
+
 
 // 核心取消注入函数实现
 SPEEDHACK_API bool Eject(DWORD dwProcessId)
@@ -246,7 +255,6 @@ SPEEDHACK_API bool Eject(DWORD dwProcessId)
     std::string dllName = GetCurrentDllName();
     HMODULE hRemoteModule = GetRemoteModuleHandle(dwProcessId, dllName.c_str());
     if (hRemoteModule == NULL) {
-        // DLL 不在目标进程中
         return false;
     }
 
@@ -255,15 +263,13 @@ SPEEDHACK_API bool Eject(DWORD dwProcessId)
         return false;
     }
 
-    // 1. 调用 Detach 函数来移除 hook
     LPVOID pRemoteShutdown = (LPVOID)GetProcAddress(GetModuleHandleA(dllName.c_str()), "RemoteThread_Shutdown");
     HANDLE hThreadShutdown = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pRemoteShutdown, NULL, 0, NULL);
     if (hThreadShutdown) {
         WaitForSingleObject(hThreadShutdown, INFINITE);
         CloseHandle(hThreadShutdown);
     }
-    
-    // 2. 调用 FreeLibrary 卸载 DLL
+
     LPVOID pFreeLibrary = (LPVOID)GetProcAddress(GetModuleHandleA("kernel32.dll"), "FreeLibrary");
     HANDLE hThreadEject = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pFreeLibrary, hRemoteModule, 0, NULL);
     if (hThreadEject == NULL) {

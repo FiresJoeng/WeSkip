@@ -1,7 +1,11 @@
+// 防止重复包含
 #pragma once
 
+
+// 包含所需头文件
 #include <Windows.h>
 #include <detours.h>
+
 
 // 为导出函数定义宏，方便管理
 #ifdef SPEEDHACK_EXPORTS
@@ -10,7 +14,8 @@
 #define SPEEDHACK_API extern "C" __declspec(dllimport)
 #endif
 
-/*Speedhack 命名空间，包含所有核心的变速逻辑*/
+
+// Speedhack 命名空间
 namespace Speedhack
 {
 	extern double speed;
@@ -40,16 +45,12 @@ namespace Speedhack
 	void SetSpeed(double relSpeed);
 }
 
-/*接口*/
 
 // 注入后在目标进程中调用的初始化函数
 SPEEDHACK_API DWORD WINAPI RemoteThread_Initialize(LPVOID lpParameter);
-
 // 在目标进程中调用的卸载函数
 SPEEDHACK_API DWORD WINAPI RemoteThread_Shutdown(LPVOID lpParameter);
-
 // Inject 函数
 SPEEDHACK_API bool Inject(DWORD dwProcessId, double speed);
-
 // Eject 函数
 SPEEDHACK_API bool Eject(DWORD dwProcessId);
