@@ -28,3 +28,11 @@ namespace Speedhack
 	void Detach();
 	void SetSpeed(double relSpeed);
 }
+
+// 导出函数声明
+extern "C" {
+	__declspec(dllexport) DWORD WINAPI InjectSpeedhack(LPVOID lpParam);
+	__declspec(dllexport) DWORD WINAPI EjectSpeedhack(LPVOID lpParam);
+	__declspec(dllexport) int SHInitialize(DWORD pid, double spd);
+	__declspec(dllexport) int SHUninitialize(DWORD pid);
+}

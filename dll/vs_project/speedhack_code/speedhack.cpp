@@ -2,8 +2,10 @@
 #include "speedhack.h"
 #include "inject.h"
 #include <Shlwapi.h>
+#include <Psapi.h>
 #pragma comment(lib, "Shlwapi.lib")
 #pragma comment(lib, "inject.lib")
+#pragma comment(lib, "Psapi.lib")
 
 
 namespace Speedhack
@@ -97,7 +99,31 @@ namespace Speedhack
 }
 
 // ----------------------------------------------------------------------------
-// 以下为“宿主进程”调用的导出函数，实现与 example.cpp 类似的注入/卸载接口
+// 注入函数：在目标进程中被调用
+// ----------------------------------------------------------------------------
+
+extern "C" __declspec(dllexport)
+DWORD WINAPI InjectSpeedhack(LPVOID lpParam)
+{
+    double* pSpeed = (double*)lpParam;
+    if (pSpeed) {
+        Speedhack::Setup();
+        Speedhack::SetSpeed(*pSpeed);
+    } else {
+        Speedhack::Setup();
+    }
+    return 0;
+}
+
+extern "C" __declspec(dllexport)
+DWORD WINAPI EjectSpeedhack(LPVOID lpParam)
+{
+    Speedhack::Detach();
+    return 0;
+}
+
+// ----------------------------------------------------------------------------
+// 以下为"宿主进程"调用的导出函数，实现注入/卸载接口
 // ----------------------------------------------------------------------------
 
 namespace {
@@ -110,7 +136,7 @@ int SHInitialize(DWORD pid, double spd)
 {
     // 1. 构造 DLL 路径
     wchar_t dllPath[MAX_PATH] = { 0 };
-    GetModuleFileNameW(GetModuleHandleW(SPEEDHACK_DLL), dllPath, MAX_PATH);
+    GetModuleFileNameW(GetModuleHandleW(nullptr), dllPath, MAX_PATH);
     PathRemoveFileSpecW(dllPath);
     PathAppendW(dllPath, SPEEDHACK_DLL);
 
@@ -119,24 +145,67 @@ int SHInitialize(DWORD pid, double spd)
         return -1;  // 注入失败
     }
 
-    // 3. 远程调用 InjectSpeedhack(spd)
-    //    这里假设 InjectDll1 会在注入后自动执行 DllMain，
-    //    并且暴露了 InjectSpeedhack 导出函数，可用 CreateRemoteThread 调用。
-    //    为简单起见，我们直接创建远程线程执行 InjectSpeedhack：
-    HMODULE hMod = GetModuleHandleW(SPEEDHACK_DLL);
-    FARPROC fn = GetProcAddress(hMod, "InjectSpeedhack");
-    if (!fn) return -2;
+    // 3. 获取目标进程句柄
+    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+    if (!hProcess) return -2;
 
-    HANDLE hThread = CreateRemoteThread(
-        OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid),
-        nullptr, 0,
-        (LPTHREAD_START_ROUTINE)fn,
-        (LPVOID)&spd,
-        0, nullptr
-    );
-    if (!hThread) return -3;
+    // 4. 在目标进程中获取注入的DLL模块句柄
+    HMODULE hRemoteMod = nullptr;
+    HMODULE hMods[1024];
+    DWORD cbNeeded;
+    if (EnumProcessModules(hProcess, hMods, sizeof(hMods), &cbNeeded)) {
+        for (unsigned int i = 0; i < (cbNeeded / sizeof(HMODULE)); i++) {
+            wchar_t szModName[MAX_PATH];
+            if (GetModuleFileNameExW(hProcess, hMods[i], szModName, sizeof(szModName) / sizeof(wchar_t))) {
+                if (wcsstr(szModName, SPEEDHACK_DLL)) {
+                    hRemoteMod = hMods[i];
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (!hRemoteMod) {
+        CloseHandle(hProcess);
+        return -3;
+    }
+
+    // 5. 获取InjectSpeedhack函数地址
+    HMODULE hLocalMod = GetModuleHandleW(nullptr);
+    FARPROC localFunc = GetProcAddress(hLocalMod, "InjectSpeedhack");
+    if (!localFunc) {
+        CloseHandle(hProcess);
+        return -4;
+    }
+    
+    // 计算远程函数地址
+    FARPROC remoteFunc = (FARPROC)((BYTE*)hRemoteMod + ((BYTE*)localFunc - (BYTE*)hLocalMod));
+
+    // 6. 在目标进程中分配内存存储speed参数
+    LPVOID pRemoteSpeed = VirtualAllocEx(hProcess, nullptr, sizeof(double), MEM_COMMIT, PAGE_READWRITE);
+    if (!pRemoteSpeed) {
+        CloseHandle(hProcess);
+        return -5;
+    }
+    
+    if (!WriteProcessMemory(hProcess, pRemoteSpeed, &spd, sizeof(double), nullptr)) {
+        VirtualFreeEx(hProcess, pRemoteSpeed, 0, MEM_RELEASE);
+        CloseHandle(hProcess);
+        return -6;
+    }
+
+    // 7. 创建远程线程执行InjectSpeedhack
+    HANDLE hThread = CreateRemoteThread(hProcess, nullptr, 0, (LPTHREAD_START_ROUTINE)remoteFunc, pRemoteSpeed, 0, nullptr);
+    if (!hThread) {
+        VirtualFreeEx(hProcess, pRemoteSpeed, 0, MEM_RELEASE);
+        CloseHandle(hProcess);
+        return -7;
+    }
+    
     WaitForSingleObject(hThread, INFINITE);
     CloseHandle(hThread);
+    VirtualFreeEx(hProcess, pRemoteSpeed, 0, MEM_RELEASE);
+    CloseHandle(hProcess);
 
     return 0;  // 成功
 }
@@ -144,25 +213,56 @@ int SHInitialize(DWORD pid, double spd)
 extern "C" __declspec(dllexport)
 int SHUninitialize(DWORD pid)
 {
-    // 1. 远程调用 EjectSpeedhack()
-    HMODULE hMod = GetModuleHandleW(SPEEDHACK_DLL);
-    FARPROC fn = GetProcAddress(hMod, "EjectSpeedhack");
-    if (!fn) return -1;
+    // 1. 获取目标进程句柄
+    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+    if (!hProcess) return -1;
 
-    HANDLE hThread = CreateRemoteThread(
-        OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid),
-        nullptr, 0,
-        (LPTHREAD_START_ROUTINE)fn,
-        nullptr,
-        0, nullptr
-    );
-    if (!hThread) return -2;
+    // 2. 在目标进程中获取注入的DLL模块句柄
+    HMODULE hRemoteMod = nullptr;
+    HMODULE hMods[1024];
+    DWORD cbNeeded;
+    if (EnumProcessModules(hProcess, hMods, sizeof(hMods), &cbNeeded)) {
+        for (unsigned int i = 0; i < (cbNeeded / sizeof(HMODULE)); i++) {
+            wchar_t szModName[MAX_PATH];
+            if (GetModuleFileNameExW(hProcess, hMods[i], szModName, sizeof(szModName) / sizeof(wchar_t))) {
+                if (wcsstr(szModName, SPEEDHACK_DLL)) {
+                    hRemoteMod = hMods[i];
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (!hRemoteMod) {
+        CloseHandle(hProcess);
+        return -2;
+    }
+
+    // 3. 获取EjectSpeedhack函数地址
+    HMODULE hLocalMod = GetModuleHandleW(nullptr);
+    FARPROC localFunc = GetProcAddress(hLocalMod, "EjectSpeedhack");
+    if (!localFunc) {
+        CloseHandle(hProcess);
+        return -3;
+    }
+    
+    // 计算远程函数地址
+    FARPROC remoteFunc = (FARPROC)((BYTE*)hRemoteMod + ((BYTE*)localFunc - (BYTE*)hLocalMod));
+
+    // 4. 创建远程线程执行EjectSpeedhack
+    HANDLE hThread = CreateRemoteThread(hProcess, nullptr, 0, (LPTHREAD_START_ROUTINE)remoteFunc, nullptr, 0, nullptr);
+    if (!hThread) {
+        CloseHandle(hProcess);
+        return -4;
+    }
+    
     WaitForSingleObject(hThread, INFINITE);
     CloseHandle(hThread);
+    CloseHandle(hProcess);
 
-    // 2. 卸载 DLL
+    // 5. 卸载 DLL
     if (!EnjectDll(pid, SPEEDHACK_DLL)) {
-        return -3;
+        return -5;
     }
 
     return 0;
