@@ -1,3 +1,5 @@
+
+
 # WeSkip
 Windows 微信小程序跳广告 | WeChatAppEx.exe ADs Skipper
 
@@ -10,7 +12,7 @@ Windows 微信小程序跳广告 | WeChatAppEx.exe ADs Skipper
 1. 克隆仓库
 2. 配置环境
 3. 编译DLL
-4. 以管理员身份执行 main.py
+4. 先运行微信小程序, 再以管理员身份执行 main.py
 5. 在可视化窗口内操作
 ```
 - *项目已不可用, 因为代码已过时. 未来会更新, 可 star 本仓库等待.*
